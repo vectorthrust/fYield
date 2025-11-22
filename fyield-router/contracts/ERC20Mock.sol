@@ -8,8 +8,7 @@ contract ERC20Mock is ERC20 {
 
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {
         // USDC and FXRP use 6 decimals for USDC-like tokens
-        // FXRP uses 18 decimals
-        _decimals = 18; // Default to 18
+        _decimals = 6;
     }
 
     function decimals() public view virtual override returns (uint8) {

@@ -89,9 +89,9 @@ A **dual-chain yield router** that bridges FXRP deposits on Flare Network with A
 ## Technical Specifications
 
 ### Token Decimals
-- FXRP: 18 decimals
+- FXRP: 6 decimals
 - USDC: 6 decimals
-- vFXRP: 18 decimals (matches FXRP)
+- vFXRP: 6 decimals (matches FXRP)
 
 ### Exchange Rate
 - 1 FXRP = 1 USDC (for demo purposes)

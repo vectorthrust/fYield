@@ -4,21 +4,20 @@ const { getAssetManagerFXRP } = require("../utils/getters");
 async function main() {
     console.log("Deploying FlareVault to", hre.network.name);
 
-    const [deployer] = await ethers.getSigners();
-    console.log("Deployer:", deployer.address);
-
     // Configuration
     let FXRP_ADDRESS;
     
+    const provider = ethers.provider;
+    
     if (hre.network.name === "coston2") {
         console.log("Network: Coston2 Testnet");
-        const assetManager = await getAssetManagerFXRP();
+        const assetManager = await getAssetManagerFXRP(provider);
         FXRP_ADDRESS = await assetManager.fAsset();
         console.log("FXRP:", FXRP_ADDRESS);
         
     } else if (hre.network.name === "flare") {
         console.log("Network: Flare Mainnet");
-        const assetManager = await getAssetManagerFXRP();
+        const assetManager = await getAssetManagerFXRP(provider);
         FXRP_ADDRESS = await assetManager.fAsset();
         console.log("FXRP:", FXRP_ADDRESS);
 
@@ -31,10 +30,16 @@ async function main() {
         throw new Error("Unsupported network. Use --network coston2 or --network flare");
     }
 
-    const OPERATOR_ADDRESS = process.env.OPERATOR_ADDRESS || deployer.address;
-
     console.log("Deploying FlareVault...");
-    const FlareVault = await ethers.getContractFactory("FlareVault");
+
+    const deployer = new ethers.Wallet(process.env.FLARE_DEPLOYER_PRIVATE_KEY, provider);
+    console.log("Deployer:", deployer.address);
+    
+    // Use deployer address as operator
+    const OPERATOR_ADDRESS = deployer.address;
+    console.log("Operator:", OPERATOR_ADDRESS);
+
+    const FlareVault = await ethers.getContractFactory("FlareVault", deployer);
     const vault = await FlareVault.deploy(
         FXRP_ADDRESS,
         OPERATOR_ADDRESS
@@ -47,7 +52,6 @@ async function main() {
     console.log("\nAdd to .env:");
     console.log(`FLARE_VAULT_ADDRESS=${vaultAddress}`);
     console.log(`FXRP_ADDRESS=${FXRP_ADDRESS}`);
-    console.log(`OPERATOR_ADDRESS=${OPERATOR_ADDRESS}`);
 }
 
 main()

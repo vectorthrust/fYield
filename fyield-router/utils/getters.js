@@ -14,24 +14,27 @@ const ASSET_MANAGER_ABI = [
 ];
 
 // Helper function to get contract instance at address
-async function getContractAt(contractName, address) {
+async function getContractAt(contractName, address, signer = null) {
+	// Use provider if no signer provided
+	const signerOrProvider = signer || ethers.provider;
+	
 	// For Flare contracts, use ABIs directly
 	if (contractName === "IFlareContractRegistry") {
-		return new ethers.Contract(address, FLARE_CONTRACT_REGISTRY_ABI, await ethers.provider.getSigner());
+		return new ethers.Contract(address, FLARE_CONTRACT_REGISTRY_ABI, signerOrProvider);
 	}
 	if (contractName === "IAssetManager") {
-		return new ethers.Contract(address, ASSET_MANAGER_ABI, await ethers.provider.getSigner());
+		return new ethers.Contract(address, ASSET_MANAGER_ABI, signerOrProvider);
 	}
 	// For local contracts, use Hardhat's getContractAt
 	return await ethers.getContractAt(contractName, address);
 }
 
-async function getFlareContractRegistry() {
-	return await getContractAt("IFlareContractRegistry", FLARE_CONTRACT_REGISTRY_ADDRESS);
+async function getFlareContractRegistry(signer = null) {
+	return await getContractAt("IFlareContractRegistry", FLARE_CONTRACT_REGISTRY_ADDRESS, signer);
 }
 
-async function getContractAddressByName(name) {
-	const flareContractRegistry = await getFlareContractRegistry();
+async function getContractAddressByName(name, signer = null) {
+	const flareContractRegistry = await getFlareContractRegistry(signer);
 	return await flareContractRegistry.getContractAddressByName(name);
 }
 
@@ -210,18 +213,18 @@ async function getFdcRequestFeeConfigurations() {
 	return await getContractAt("IFdcRequestFeeConfigurations", address);
 }
 
-async function getAssetManagerController() {
-	const address = await getContractAddressByName("AssetManagerController");
-	return await getContractAt("IAssetManagerController", address);
+async function getAssetManagerController(signer = null) {
+	const address = await getContractAddressByName("AssetManagerController", signer);
+	return await getContractAt("IAssetManagerController", address, signer);
 }
 
-async function getAssetManagerFXRP() {
+async function getAssetManagerFXRP(signer = null) {
 	const validNetworks = ["coston2", "coston", "songbird", "flare"];
 	if (!validNetworks.includes(hre.network.name)) {
 		throw new Error(`Contract not deployed on ${hre.network.name}`);
 	}
-	const address = await getContractAddressByName("AssetManagerFXRP");
-	return await getContractAt("IAssetManager", address);
+	const address = await getContractAddressByName("AssetManagerFXRP", signer);
+	return await getContractAt("IAssetManager", address, signer);
 }
 
 async function getJsonApiVerification() {

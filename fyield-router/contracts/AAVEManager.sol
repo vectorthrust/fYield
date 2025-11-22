@@ -70,12 +70,14 @@ contract AAVEManager is Ownable, ReentrancyGuard {
 
     /**
      * @notice Operator supplies USDC to AAVE on behalf of a Flare user
+     * @dev Expects USDC to already be in this contract
      * @param flareUser The user's address on Flare network (for tracking)
      * @param amount Amount of USDC to supply
      */
     function supplyToAAVE(address flareUser, uint256 amount) external onlyOperator nonReentrant {
         require(amount > 0, "Zero amount");
         require(flareUser != address(0), "Invalid user address");
+        require(USDC.balanceOf(address(this)) >= amount, "Insufficient USDC in contract");
         
         // Supply USDC to AAVE
         aavePool.supply(address(USDC), amount, address(this), 0);

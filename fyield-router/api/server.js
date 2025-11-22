@@ -12,8 +12,8 @@ const FLARE_RPC = process.env.FLARE_RPC_URL || 'https://coston2-api.flare.networ
 const MAINNET_RPC = process.env.MAINNET_RPC_URL || 'https://eth.llamarpc.com';
 const FLARE_VAULT_ADDRESS = process.env.FLARE_VAULT_ADDRESS;
 const MAINNET_MANAGER_ADDRESS = process.env.MAINNET_MANAGER_ADDRESS;
-const FLARE_OPERATOR_PRIVATE_KEY = process.env.FLARE_OPERATOR_PRIVATE_KEY;
-const AAVE_OPERATOR_PRIVATE_KEY = process.env.AAVE_OPERATOR_PRIVATE_KEY;
+const FLARE_OPERATOR_PRIVATE_KEY = process.env.FLARE_DEPLOYER_PRIVATE_KEY;
+const AAVE_OPERATOR_PRIVATE_KEY = process.env.AAVE_DEPLOYER_PRIVATE_KEY;
 
 // Providers
 const flareProvider = new ethers.JsonRpcProvider(FLARE_RPC);
@@ -93,7 +93,7 @@ async function watchWithdrawalRequests() {
             if (withdrawEvent) {
                 const parsed = mainnetManager.interface.parseLog(withdrawEvent);
                 yieldAmount = parsed.args.yieldAmount;
-                console.log(`  Yield: ${ethers.formatUnits(yieldAmount, 6)} USDC (sent to user on Sepolia)`);
+                console.log(`  Yield: ${ethers.formatUnits(yieldAmount, 6)} USDC (sent to user on Mainnet)`);
             }
             
             console.log(`  Completing on Flare...`);
@@ -129,7 +129,7 @@ app.get('/balance/:address', async (req, res) => {
         const yield = await mainnetManager.getUserYield(address);
         
         res.json({
-            vFxrpBalance: ethers.formatUnits(balance, 18),
+            vFxrpBalance: ethers.formatUnits(balance, 6),
             usdcSupplied: ethers.formatUnits(supplied, 6),
             yieldEarned: ethers.formatUnits(yield, 6)
         });
@@ -159,7 +159,7 @@ app.get('/stats', async (req, res) => {
 app.post('/manual/deposit', async (req, res) => {
     try {
         const { user, fxrpAmount } = req.body;
-        const usdcAmount = vFxrpToUSDC(ethers.parseUnits(fxrpAmount, 18));
+        const usdcAmount = vFxrpToUSDC(ethers.parseUnits(fxrpAmount, 6));
         
         const tx = await mainnetManager.supplyToAAVE(user, usdcAmount);
         await tx.wait();
@@ -178,7 +178,7 @@ app.post('/manual/deposit', async (req, res) => {
 app.post('/manual/withdraw', async (req, res) => {
     try {
         const { user, vFxrpAmount } = req.body;
-        const usdcPrincipal = vFxrpToUSDC(ethers.parseUnits(vFxrpAmount, 18));
+        const usdcPrincipal = vFxrpToUSDC(ethers.parseUnits(vFxrpAmount, 6));
         
         const withdrawTx = await mainnetManager.withdrawFromAAVE(user, usdcPrincipal);
         const withdrawReceipt = await withdrawTx.wait();
@@ -201,7 +201,7 @@ app.post('/manual/withdraw', async (req, res) => {
         
         const completeTx = await flareVault.completeWithdraw(
             user,
-            ethers.parseUnits(vFxrpAmount, 18)
+            ethers.parseUnits(vFxrpAmount, 6)
         );
         await completeTx.wait();
         

@@ -11,7 +11,7 @@ async function main() {
 
     // Load addresses from env
     const FLARE_VAULT_ADDRESS = process.env.FLARE_VAULT_ADDRESS;
-    const assetManager = await getAssetManagerFXRP();
+    const assetManager = await getAssetManagerFXRP(provider);
     const FXRP_ADDRESS = await assetManager.fAsset();
 
     console.log("FXRP Token Address:", FXRP_ADDRESS);
@@ -29,9 +29,7 @@ async function main() {
     const vaultWithSigner = vault.connect(user);
 
     const fxrpBalance = await fxrp.balanceOf(user.address);
-    console.log("FXRP raw balance:", fxrpBalance.toString());
-    console.log("FXRP balance (18 decimals):", ethers.formatUnits(fxrpBalance, 18));
-    console.log("FXRP balance (6 decimals):", ethers.formatUnits(fxrpBalance, 6));
+    console.log("FXRP balance:", ethers.formatUnits(fxrpBalance, 6));
 
     if (c2flrBalance === 0n) {
         console.log("\n❌ ERROR: No C2FLR for gas fees!");
