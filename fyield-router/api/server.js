@@ -266,24 +266,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Get user balance
-app.get('/balance/:address', async (req, res) => {
-    try {
-        const { address } = req.params;
-        const balance = await flareVault.getUserBalance(address);
-        const supplied = await mainnetManager.userSupplied(address);
-        const yield = await mainnetManager.getUserYield(address);
-        
-        res.json({
-            vFxrpBalance: ethers.formatUnits(balance, 6),
-            usdcSupplied: ethers.formatUnits(supplied, 6),
-            yieldEarned: ethers.formatUnits(yield, 6)
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Get user-specific stats
 app.get('/user/:address', async (req, res) => {
     try {
@@ -320,87 +302,8 @@ app.get('/global', async (req, res) => {
     }
 });
 
-// Get total stats
-app.get('/stats', async (req, res) => {
-    try {
-        const totalSupplied = await mainnetManager.totalSupplied();
-        const aaveBalance = await mainnetManager.getAAVEBalance();
-        const totalYield = await mainnetManager.getTotalYieldEarned();
-        
-        res.json({
-            totalSupplied: ethers.formatUnits(totalSupplied, 6),
-            aaveBalance: ethers.formatUnits(aaveBalance, 6),
-            totalYield: ethers.formatUnits(totalYield, 6)
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Manual deposit trigger (for testing)
-app.post('/manual/deposit', async (req, res) => {
-    try {
-        const { user, fxrpAmount } = req.body;
-        const usdcAmount = vFxrpToUSDC(ethers.parseUnits(fxrpAmount, 6));
-        
-        const tx = await mainnetManager.supplyToAAVE(user, usdcAmount);
-        await tx.wait();
-        
-        res.json({ 
-            success: true,
-            txHash: tx.hash,
-            usdcSupplied: ethers.formatUnits(usdcAmount, 6)
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Manual withdrawal trigger (for testing)
-app.post('/manual/withdraw', async (req, res) => {
-    try {
-        const { user, vFxrpAmount } = req.body;
-        const usdcPrincipal = vFxrpToUSDC(ethers.parseUnits(vFxrpAmount, 6));
-        
-        const withdrawTx = await mainnetManager.withdrawFromAAVE(user, usdcPrincipal);
-        const withdrawReceipt = await withdrawTx.wait();
-        
-        // Get yield from event
-        const withdrawEvent = withdrawReceipt.logs.find(log => {
-            try {
-                const parsed = mainnetManager.interface.parseLog(log);
-                return parsed && parsed.name === 'USDCWithdrawn';
-            } catch {
-                return false;
-            }
-        });
-        
-        let yieldAmount = 0;
-        if (withdrawEvent) {
-            const parsed = mainnetManager.interface.parseLog(withdrawEvent);
-            yieldAmount = parsed.args.yieldAmount;
-        }
-        
-        const completeTx = await flareVault.completeWithdraw(
-            user,
-            ethers.parseUnits(vFxrpAmount, 6)
-        );
-        await completeTx.wait();
-        
-        res.json({ 
-            success: true,
-            sepoliaTxHash: withdrawTx.hash,
-            flareTxHash: completeTx.hash,
-            yieldEarned: ethers.formatUnits(yieldAmount, 6),
-            note: 'USDC yield sent to user on Sepolia, FXRP returned on Flare'
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Start server
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`\nAPI running on port ${PORT}`);
     
