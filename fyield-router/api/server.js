@@ -27,14 +27,65 @@ const mainnetWallet = new ethers.Wallet(AAVE_OPERATOR_PRIVATE_KEY, mainnetProvid
 const flareVault = new ethers.Contract(FLARE_VAULT_ADDRESS, FlareVaultABI, flareWallet);
 const mainnetManager = new ethers.Contract(MAINNET_MANAGER_ADDRESS, AAVEManagerABI, mainnetWallet);
 
-// Conversion rate: 1 FXRP = 1 USDC (for demo purposes)
-const FXRP_TO_USDC_RATE = 1;
+// Flare Contract Registry and FTSO setup
+const FLARE_CONTRACT_REGISTRY = '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019';
+const REGISTRY_ABI = [
+    'function getContractAddressByName(string memory _name) external view returns (address)'
+];
+const contractRegistry = new ethers.Contract(FLARE_CONTRACT_REGISTRY, REGISTRY_ABI, flareProvider);
 
-// vFXRP is minted 1:1 with FXRP amount (both effectively 6 decimals)
-// USDC also has 6 decimals
-function vFxrpToUSDC(vFxrpAmount) {
-    // vFXRP amount equals FXRP amount (both 6 decimals), return as-is for USDC
-    return vFxrpAmount;
+// FTSO Registry interface
+const FTSO_REGISTRY_ABI = [
+    'function getCurrentPriceWithDecimals(string memory _symbol) external view returns (uint256 _price, uint256 _timestamp, uint256 _decimals)'
+];
+
+// Initialize FTSO Registry
+let ftsoRegistry;
+(async () => {
+    const ftsoRegistryAddress = await contractRegistry.getContractAddressByName('FtsoRegistry');
+    ftsoRegistry = new ethers.Contract(ftsoRegistryAddress, FTSO_REGISTRY_ABI, flareProvider);
+    console.log('FTSO Registry initialized:', ftsoRegistryAddress);
+})();
+
+// Track user deposits: user address => USDC amount deposited
+const userDeposits = new Map();
+
+// Get current XRP/USD price from Flare FTSO
+async function getXRPPrice() {
+    try {
+        // On Coston2 testnet, use 'testXRP'
+        // On Flare mainnet, use 'XRP'
+        const symbol = process.env.FLARE_RPC_URL?.includes('coston2') ? 'testXRP' : 'XRP';
+        
+        const result = await ftsoRegistry.getCurrentPriceWithDecimals(symbol);
+        const price = result[0];      // _price
+        const timestamp = result[1];  // _timestamp
+        const decimals = result[2];   // _decimals
+        
+        // Convert to human-readable price
+        const priceUSD = Number(price) / Math.pow(10, Number(decimals));
+        
+        console.log(`  ${symbol} Price: $${priceUSD.toFixed(4)} (updated ${Math.floor(Date.now() / 1000) - Number(timestamp)}s ago)`);
+        return priceUSD;
+    } catch (error) {
+        console.error('  Error fetching XRP price:', error.message);
+        console.log('  Falling back to $1.00');
+        return 1.0; // Fallback
+    }
+}
+
+// Convert FXRP amount to equivalent USDC amount using current price
+async function fxrpToUSDC(fxrpAmount) {
+    const xrpPrice = await getXRPPrice();
+    
+    // fxrpAmount is in 6 decimals (e.g., 1000000 = 1 FXRP)
+    const fxrpFloat = Number(fxrpAmount) / 1e6;
+    const usdcFloat = fxrpFloat * xrpPrice;
+    const usdcAmount = BigInt(Math.floor(usdcFloat * 1e6));
+    
+    console.log(`  Converting: ${fxrpFloat} FXRP × $${xrpPrice} = ${usdcFloat.toFixed(6)} USDC`);
+    
+    return usdcAmount;
 }
 
 console.log('FXRP Yield Router API');
@@ -51,16 +102,26 @@ async function watchFlareDeposits() {
             console.log(`\nDeposit: ${user}`);
             console.log(`  FXRP: ${ethers.formatUnits(fxrpAmount, 6)}`);
             
-            const usdcAmount = vFxrpToUSDC(fxrpAmount);
-            console.log(`  USDC: ${ethers.formatUnits(usdcAmount, 6)}`);
+            // Calculate USDC amount based on current XRP price
+            const usdcAmount = await fxrpToUSDC(fxrpAmount);
+            console.log(`  USDC to supply: ${ethers.formatUnits(usdcAmount, 6)}`);
+            
+            // Store the USDC amount for this user (for withdrawal later)
+            const currentDeposit = userDeposits.get(user) || 0n;
+            userDeposits.set(user, currentDeposit + usdcAmount);
             
             console.log(`  Supplying to AAVE...`);
-            const tx = await mainnetManager.supplyToAAVE(user, usdcAmount);
+            const tx = await mainnetManager.supplyToAAVE(user, usdcAmount, {
+                gasLimit: 300000 // Set explicit gas limit for AAVE operations
+            });
             await tx.wait();
             
             console.log(`  Supplied to AAVE: ${tx.hash}`);
         } catch (error) {
             console.error(`  Error:`, error.message);
+            if (error.reason) {
+                console.error(`  Reason:`, error.reason);
+            }
         }
     });
 }
@@ -74,10 +135,20 @@ async function watchWithdrawalRequests() {
             console.log(`\nWithdrawal: ${user}`);
             console.log(`  vFXRP: ${ethers.formatUnits(vFxrpAmount, 6)}`);
             
-            const usdcPrincipal = vFxrpToUSDC(vFxrpAmount);
+            // Get the USDC amount that was originally deposited for this user
+            const usdcPrincipal = userDeposits.get(user) || 0n;
+            
+            if (usdcPrincipal === 0n) {
+                console.error(`  Error: No deposit record found for user ${user}`);
+                return;
+            }
+            
+            console.log(`  Original USDC deposited: ${ethers.formatUnits(usdcPrincipal, 6)}`);
             
             console.log(`  Withdrawing from AAVE...`);
-            const withdrawTx = await mainnetManager.withdrawFromAAVE(user, usdcPrincipal);
+            const withdrawTx = await mainnetManager.withdrawFromAAVE(user, usdcPrincipal, {
+                gasLimit: 400000 // Set explicit gas limit for AAVE withdrawal
+            });
             const withdrawReceipt = await withdrawTx.wait();
             
             const withdrawEvent = withdrawReceipt.logs.find(log => {
@@ -96,14 +167,22 @@ async function watchWithdrawalRequests() {
                 console.log(`  Yield: ${ethers.formatUnits(yieldAmount, 6)} USDC (sent to user on Mainnet)`);
             }
             
+            // Clear the deposit record for this user
+            userDeposits.delete(user);
+            
             console.log(`  Completing on Flare...`);
-            const completeTx = await flareVault.completeWithdraw(user, vFxrpAmount);
+            const completeTx = await flareVault.completeWithdraw(user, vFxrpAmount, {
+                gasLimit: 200000 // Set explicit gas limit for Flare operations
+            });
             await completeTx.wait();
             
             console.log(`  Completed: ${completeTx.hash}`);
-            console.log(`  User received: ${ethers.formatUnits(vFxrpAmount, 6)} FXRP on Flare + ${ethers.formatUnits(yieldAmount, 6)} USDC on Mainnet`);
+            console.log(`  User received: ${ethers.formatUnits(vFxrpAmount, 6)} FXRP on Flare + ${ethers.formatUnits(yieldAmount, 6)} USDC yield on Mainnet`);
         } catch (error) {
             console.error(`  Error:`, error.message);
+            if (error.reason) {
+                console.error(`  Reason:`, error.reason);
+            }
         }
     });
 }
