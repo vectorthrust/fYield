@@ -9,9 +9,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useState } from "react";
-import { useWallets } from '@privy-io/react-auth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { getXRPPrice } from "../../utils/price";
 import { ethers } from 'ethers';
+import Link from 'next/link';
 
 function shortenAddress(addr?: string) {
   if (!addr) return "";
@@ -246,8 +247,68 @@ export default function vault() {
 
   const maxBalance = fxrpBalance ?? 0;
 
+  const { logout } = usePrivy();
+
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  const handleToggle = () => {
+    setIsOpen((prev) => !prev);
+  };
+
+  const handleSignOut = async () => {
+    setIsOpen(false);
+    await logout();
+  };
+
   return (
     <div className="h-screen w-screen flex items-center justify-center">
+
+      {/* 🔥 Top-right wallet pill */}
+      <div className="absolute top-4 right-4 z-20">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={handleToggle}
+            className="flex items-center gap-2 rounded-lg border bg-white/80 backdrop-blur px-3 py-1 shadow-sm hover:bg-white transition"
+          >
+            <img
+              src="https://cryptologos.cc/logos/flare-flr-logo.png"
+              alt="Flare"
+              className="w-3 h-3"
+            />
+            <span className="text-xs font-medium">
+              {address ? shortenAddress(address) : 'No wallet'}
+            </span>
+            <span
+              className={`text-xs transition-transform ${
+                isOpen ? 'rotate-180' : ''
+              }`}
+            >
+              ▾
+            </span>
+          </button>
+
+          {isOpen && (
+            <div className="absolute right-0 mt-2 w-40 rounded-xl border bg-white shadow-lg py-2 text-sm">
+              <Link
+                href="/yield/dashboard" // change this route if your dashboard lives somewhere else
+                className="block px-3 py-2 hover:bg-gray-50"
+                onClick={() => setIsOpen(false)}
+              >
+                Dashboard
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-col items-center">
         <h1 className="text-5xl font-bold tracking-tight mb-6 text-center">
           fYield
@@ -407,7 +468,7 @@ export default function vault() {
               >
                 {txStatus === "idle" && "Deposit to Aave vault"}
                 {txStatus === "pending" && "Approving & depositing..."}
-                {txStatus === "success" && "Deposited ✔"}
+                {txStatus === "success" && "Deposited ✅"}
                 {txStatus === "error" && "Retry deposit"}
               </button>
 

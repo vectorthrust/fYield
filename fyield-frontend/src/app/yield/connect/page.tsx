@@ -21,7 +21,7 @@ export default function CardWithForm() {
   // Auto-redirect after login + wallet creation
   useEffect(() => {
     if (ready && authenticated && user?.wallet?.address) {
-      router.push('/start/onramp'); // redirect after wallet is ready
+      router.push('/yield/vault'); // redirect after wallet is ready
     }
   }, [ready, authenticated, user?.wallet?.address, router]);
 
