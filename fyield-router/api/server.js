@@ -284,6 +284,42 @@ app.get('/balance/:address', async (req, res) => {
     }
 });
 
+// Get user-specific stats
+app.get('/user/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+        
+        const vaultShares = await mainnetManager.balanceOf(address); // #1: AAVEManager vault shares
+        const vFxrpBalance = await flareVault.balanceOf(address); // #2: vFXRP balance
+        const userYield = await mainnetManager.getUserYield(address); // #3: Earned yield
+        
+        res.json({
+            vaultShares: ethers.formatUnits(vaultShares, 18), // aavUSDC shares (18 decimals)
+            vFxrpBalance: ethers.formatUnits(vFxrpBalance, 6), // vFXRP balance (6 decimals)
+            earnedYield: ethers.formatUnits(userYield, 6) // USDC (6 decimals)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get global stats
+app.get('/global', async (req, res) => {
+    try {
+        const totalAUSDC = await mainnetManager.getAAVEBalance(); // #4: Total aUSDC in AAVE
+        const totalUSDC = await mainnetManager.getUSDCBalance(); // #5: Total USDC in manager
+        const totalYieldEarned = await mainnetManager.getTotalYieldEarned(); // #6: Total yield all users
+        
+        res.json({
+            totalAUSDCInAAVE: ethers.formatUnits(totalAUSDC, 6), // aUSDC (6 decimals)
+            totalUSDCInManager: ethers.formatUnits(totalUSDC, 6), // USDC (6 decimals)
+            totalYieldAllUsers: ethers.formatUnits(totalYieldEarned, 6) // USDC (6 decimals)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get total stats
 app.get('/stats', async (req, res) => {
     try {
@@ -364,7 +400,7 @@ app.post('/manual/withdraw', async (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 app.listen(PORT, async () => {
     console.log(`\nAPI running on port ${PORT}`);
     
