@@ -1,14 +1,94 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
+type GlobalStats = {
+  totalAUSDCInAAVE: string;      // TVL (aUSDC)
+  totalUSDCInManager: string;    // Max USDC liquidity
+  totalYieldAllUsers: string;    // Yield earned
+};
+
 export default function Hero() {
   const router = useRouter();
-  
+
+  const [stats, setStats] = useState<GlobalStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const handleRedirect = () => {
     router.push('/yield/connect');
   };
+
+  useEffect(() => {
+    const fetchGlobalStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await fetch("http://localhost:8000/global");
+        if (!res.ok) {
+          throw new Error(`Backend error: ${res.status}`);
+        }
+
+        const data: GlobalStats = await res.json();
+        setStats(data);
+      } catch (err: any) {
+        console.error("Failed to fetch global stats:", err);
+        setError("Failed to load protocol stats");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGlobalStats();
+  }, []);
+
+  const parseNumber = (value?: string | null) => {
+    if (!value) return null;
+    const n = Number(value);
+    if (Number.isNaN(n)) return null;
+    return n;
+  };
+
+  const formatUsd = (value?: string | null) => {
+    const n = parseNumber(value);
+    if (n == null) return "--";
+    return n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const formatToken = (value?: string | null, decimals = 2) => {
+    const n = parseNumber(value);
+    if (n == null) return "--";
+    return n.toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  const formatYieldWithPlus = (value?: string | null, decimals = 2) => {
+    const n = parseNumber(value);
+    if (n == null) return "--";
+    const absFormatted = n.toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    return (n >= 0 ? "+" : "−") + absFormatted;
+  };
+
+  // Shortcuts for stats
+  const tvlAave = stats?.totalAUSDCInAAVE ?? null;
+  const maxUsdcAave = stats?.totalUSDCInManager ?? null;
+  const yieldAave = stats?.totalYieldAllUsers ?? null;
+
+  // Big headline totals (only Aave for now)
+  const totalTvl = formatUsd(tvlAave);
+  const totalMaxUsdc = formatToken(maxUsdcAave, 2);
+  const totalYield = formatYieldWithPlus(yieldAave, 2);
 
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#FFFCED] text-black">
@@ -35,11 +115,16 @@ export default function Hero() {
             </p>
 
             {/* Big Total */}
-            <p className="text-3xl font-bold text-gray-900 mb-4">
-              $2,222,221
+            <p className="text-3xl font-bold text-gray-900 mb-2">
+              {loading ? "Loading..." : `$${totalTvl}`}
             </p>
+            {error && (
+              <p className="text-[10px] text-red-500 mb-2">
+                {error}
+              </p>
+            )}
 
-            <div className="space-y-4">
+            <div className="space-y-4 mt-2">
               {/* Aave */}
               <div className="flex items-center justify-between text-gray-800">
                 <div className="flex items-center gap-2">
@@ -51,13 +136,13 @@ export default function Hero() {
                   <span className="text-sm">Aave Vault</span>
                 </div>
                 <span className="text-sm font-semibold">
-                  $1,234,567
+                  {loading ? "…" : `$${formatUsd(tvlAave)}`}
                 </span>
               </div>
 
               <div className="h-px bg-gray-200" />
 
-              {/* Curve */}
+              {/* Curve (not implemented yet) */}
               <div className="flex items-center justify-between text-gray-800">
                 <div className="flex items-center gap-2">
                   <img
@@ -68,7 +153,7 @@ export default function Hero() {
                   <span className="text-sm">Curve Vault</span>
                 </div>
                 <span className="text-sm font-semibold">
-                  $987,654
+                  $0.00
                 </span>
               </div>
             </div>
@@ -82,7 +167,7 @@ export default function Hero() {
 
             {/* Big Total */}
             <p className="text-3xl font-bold text-gray-900 mb-4">
-              3,500,000 USDC
+              {loading ? "Loading..." : `${totalMaxUsdc} USDC`}
             </p>
 
             <div className="space-y-4">
@@ -102,7 +187,7 @@ export default function Hero() {
                   <span className="text-sm">Aave Vault</span>
                 </div>
                 <span className="text-sm font-semibold">
-                  2,000,000
+                  {loading ? "…" : `${formatToken(maxUsdcAave, 2)}`}
                 </span>
               </div>
 
@@ -124,7 +209,7 @@ export default function Hero() {
                   <span className="text-sm">Curve Vault</span>
                 </div>
                 <span className="text-sm font-semibold">
-                  1,500,000
+                  0
                 </span>
               </div>
             </div>
@@ -138,7 +223,7 @@ export default function Hero() {
 
             {/* Big Total */}
             <p className="text-3xl font-bold text-emerald-600 mb-4">
-              +22,221 USDC
+              {loading ? "Loading..." : `${totalYield} USDC`}
             </p>
 
             <div className="space-y-4">
@@ -153,7 +238,9 @@ export default function Hero() {
                   <span className="text-sm">Aave Vault</span>
                 </div>
                 <span className="text-sm font-semibold text-emerald-600">
-                  +12,345 USDC
+                  {loading
+                    ? "…"
+                    : `${formatYieldWithPlus(yieldAave, 2)} USDC`}
                 </span>
               </div>
 
@@ -170,7 +257,7 @@ export default function Hero() {
                   <span className="text-sm">Curve Vault</span>
                 </div>
                 <span className="text-sm font-semibold text-emerald-600">
-                  +9,876 USDC
+                  +0.00 USDC
                 </span>
               </div>
             </div>

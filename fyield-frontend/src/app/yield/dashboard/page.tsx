@@ -44,6 +44,9 @@ const ERC20_ABI = [
   },
 ];
 
+// Hardcoded APY for now
+const VAULT_APY = 4.15;
+
 export default function Dashboard() {
   const router = useRouter();
   const { wallets } = useWallets();
@@ -51,19 +54,21 @@ export default function Dashboard() {
 
   const address = wallets[0]?.address;
 
-  // FXRP balance state
+  // FXRP balance state (wallet)
   const [fxrpBalance, setFxrpBalance] = useState<number | null>(null);
   const [fxrpDecimals, setFxrpDecimals] = useState<number>(6);
 
   // Wallet pill dropdown
   const [isOpen, setIsOpen] = useState(false);
 
-  // 🔢 Mocked values for now (USDC in vault, APY, rewards, vFXRP)
-  const mockVaultUsdc = 123.45;
-  const mockVaultAPY = 4.15;
-  const mockVaultRewards = 0.789;
-  const mockVaultVFXRP = 98.76;
+  // 🔢 User stats from backend
+  const [vaultShares, setVaultShares] = useState<string | null>(null);
+  const [vFxrpBalance, setVFxrpBalance] = useState<string | null>(null);
+  const [earnedYield, setEarnedYield] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
+  // Load FXRP wallet balance
   useEffect(() => {
     const loadBalance = async () => {
       try {
@@ -91,6 +96,45 @@ export default function Dashboard() {
     loadBalance();
   }, [address]);
 
+  // Load user stats from backend: http://localhost:8000/user/:address
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!address) {
+        setVaultShares(null);
+        setVFxrpBalance(null);
+        setEarnedYield(null);
+        return;
+      }
+
+      try {
+        setStatsLoading(true);
+        setStatsError(null);
+
+        const res = await fetch(`http://localhost:8000/user/${address}`);
+        if (!res.ok) {
+          throw new Error(`Backend error: ${res.status}`);
+        }
+
+        const data: {
+          vaultShares: string;
+          vFxrpBalance: string;
+          earnedYield: string;
+        } = await res.json();
+
+        setVaultShares(data.vaultShares);
+        setVFxrpBalance(data.vFxrpBalance);
+        setEarnedYield(data.earnedYield);
+      } catch (err: any) {
+        console.error('Failed to fetch user stats:', err);
+        setStatsError('Failed to load vault stats');
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [address]);
+
   const handleToggle = () => {
     setIsOpen((prev) => !prev);
   };
@@ -109,6 +153,13 @@ export default function Dashboard() {
   const handleWithdraw = () => {
     // TODO: add Privy + vault withdraw logic here
     console.log('Withdraw clicked');
+  };
+
+  const formatOrDash = (value: string | null, decimals: number) => {
+    if (value == null || value === '') return '--';
+    const num = Number(value);
+    if (Number.isNaN(num)) return '--';
+    return num.toFixed(decimals);
   };
 
   return (
@@ -161,16 +212,16 @@ export default function Dashboard() {
 
       {/* Main content */}
       <div className="flex flex-col items-center w-full max-w-3xl px-4 gap-6">
-      <Link href="/" className="inline-block">
-        <h1 className="text-5xl font-bold tracking-tight text-center cursor-pointer hover:opacity-80 transition">
-          fYield
-          <img
-            src="https://i.imgur.com/PLrFoiD.png"
-            alt="icon"
-            className="inline-block w-6 h-6 align-super ml-1 mb-1"
-          />
-        </h1>
-      </Link>
+        <Link href="/" className="inline-block">
+          <h1 className="text-5xl font-bold tracking-tight text-center cursor-pointer hover:opacity-80 transition">
+            fYield
+            <img
+              src="https://i.imgur.com/PLrFoiD.png"
+              alt="icon"
+              className="inline-block w-6 h-6 align-super ml-1 mb-1"
+            />
+          </h1>
+        </Link>
 
         {/* Your Deposits */}
         <Card className="w-full overflow-hidden gap-2 relative">
@@ -210,11 +261,18 @@ export default function Dashboard() {
                 <div className="flex flex-col gap-1">
                   <p className="text-xs text-gray-500">Deposited</p>
                   <p className="text-lg font-semibold">
-                    {mockVaultUsdc.toFixed(2)} USDC
+                    {statsLoading
+                      ? 'Loading...'
+                      : `${formatOrDash(vaultShares, 2)} USDC`}
                   </p>
                   <p className="text-xs text-gray-500">
-                    vFXRP: {mockVaultVFXRP.toFixed(4)}
+                    vFXRP: {formatOrDash(vFxrpBalance, 4)}
                   </p>
+                  {statsError && (
+                    <p className="text-[10px] text-red-500 mt-1">
+                      {statsError}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -223,13 +281,15 @@ export default function Dashboard() {
                 <div className="flex flex-col items-end">
                   <p className="text-xs text-gray-500">APY</p>
                   <p className="text-lg font-semibold">
-                    {mockVaultAPY.toFixed(2)}%
+                    {VAULT_APY.toFixed(2)}%
                   </p>
                 </div>
                 <div className="flex flex-col items-end">
                   <p className="text-xs text-gray-500">Available rewards</p>
                   <p className="text-sm font-semibold">
-                    {mockVaultRewards.toFixed(4)} USDC
+                    {statsLoading
+                      ? 'Loading...'
+                      : `${formatOrDash(earnedYield, 4)} USDC`}
                   </p>
                 </div>
                 <button
@@ -279,7 +339,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Right: APY + Deposit */}
+              {/* Right: Deposit */}
               <div className="flex flex-col items-end gap-2">
                 <Link href="/yield/vault">
                   <button
@@ -304,10 +364,10 @@ export default function Dashboard() {
           <span>
             <b>Powered</b> by
             <img
-                  src="https://wp.logos-download.com/wp-content/uploads/2024/09/Flare_FLR_Logo_full.png"
-                  alt="icon"
-                  className="inline-block w-12 h-4 ml-1 mb-1"
-              />
+              src="https://wp.logos-download.com/wp-content/uploads/2024/09/Flare_FLR_Logo_full.png"
+              alt="icon"
+              className="inline-block w-12 h-4 ml-1 mb-1"
+            />
           </span>
         </div>
       </div>
