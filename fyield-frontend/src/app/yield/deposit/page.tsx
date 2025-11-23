@@ -25,7 +25,7 @@ const COSTON2_RPC = "https://coston2-api.flare.network/ext/C/rpc";
 const coston2Provider = new ethers.JsonRpcProvider(COSTON2_RPC);
 
 // FlareVault contract address (where FXRP is deposited)
-const VAULT_CONTRACT_ADDRESS = "0xa16f5Ff80631a2A9ECB7fd2D113c6eAb2B2a3660";
+const VAULT_CONTRACT_ADDRESS = "0x35E40975983E19781305e25552047679DF159d89";
 
 // FXRP token address on Coston2
 const FXRP_ADDRESS = "0x0b6A3645c240605887a5532109323A3E12273dc7";
@@ -58,16 +58,19 @@ const ERC20_ABI = [
   },
 ];
 
-// FlareVault ABI: matches your Hardhat script: vault.deposit(uint256 amount)
+// FlareVault ABI: ERC4626-style vault.deposit(uint256 assets, address receiver)
 const VAULT_ABI = [
   {
     name: "deposit",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [],
+    inputs: [
+      { name: "assets", type: "uint256" },
+      { name: "receiver", type: "address" },
+    ],
+    // ERC4626 deposit returns shares
+    outputs: [{ name: "shares", type: "uint256" }],
   },
-  // optional, if you ever want to read it:
   {
     name: "getUserBalance",
     type: "function",
@@ -77,9 +80,10 @@ const VAULT_ABI = [
   },
 ];
 
-export default function vault() {
-    const router = useRouter();
+export default function Vault() {
+  const router = useRouter();
   const { wallets } = useWallets();
+  const { logout } = usePrivy();
 
   const [fxrpBalance, setFxrpBalance] = useState<number | null>(null);
   const [fxrpDecimals, setFxrpDecimals] = useState<number>(6); // FXRP uses 6 in your script
@@ -147,7 +151,7 @@ export default function vault() {
     if (num > fxrpBalance) {
       setAmount(fxrpBalance.toString());
     }
-  }, [fxrpBalance]);
+  }, [fxrpBalance, amount]);
 
   // pure math: FXRP → USDC using loaded price
   React.useEffect(() => {
@@ -183,9 +187,9 @@ export default function vault() {
     setErrorMessage("");
   };
 
-  // 🔥 EXACT FLOW FROM YOUR SCRIPT:
+  // 🔥 New flow matching your Hardhat script:
   // 1) fxrp.approve(FLARE_VAULT_ADDRESS, depositAmount)
-  // 2) vault.deposit(depositAmount)
+  // 2) vault.deposit(depositAmount, userAddress)
   const handleDeposit = async () => {
     const wallet = wallets[0];
 
@@ -220,7 +224,7 @@ export default function vault() {
       const ethersProvider = new ethers.BrowserProvider(eip1193);
       const signer = await ethersProvider.getSigner();
 
-      // Contracts "connected" to signer = your `fxrpWithSigner` and `vaultWithSigner`
+      // Contracts with signer
       const fxrpWithSigner = new ethers.Contract(FXRP_ADDRESS, ERC20_ABI, signer);
       const vaultWithSigner = new ethers.Contract(VAULT_CONTRACT_ADDRESS, VAULT_ABI, signer);
 
@@ -230,9 +234,9 @@ export default function vault() {
       await approveTx.wait();
       console.log("Approve tx confirmed:", approveTx.hash);
 
-      // 2️⃣ Deposit into vault: vault.deposit(amount)
+      // 2️⃣ Deposit into vault: vault.deposit(assets, receiver)
       console.log("Depositing FXRP into vault...");
-      const depositTx = await vaultWithSigner.deposit(amountInUnits);
+      const depositTx = await vaultWithSigner.deposit(amountInUnits, address);
       const receipt = await depositTx.wait();
       console.log("Deposit tx confirmed:", receipt?.hash);
 
@@ -248,8 +252,6 @@ export default function vault() {
   };
 
   const maxBalance = fxrpBalance ?? 0;
-
-  const { logout } = usePrivy();
 
   const [isOpen, setIsOpen] = React.useState(false);
 
@@ -298,7 +300,7 @@ export default function vault() {
           {isOpen && (
             <div className="absolute right-0 mt-2 w-40 rounded-xl border bg-white shadow-lg py-2 text-sm">
               <Link
-                href="/yield/dashboard" // change this route if your dashboard lives somewhere else
+                href="/yield/dashboard"
                 className="block px-3 py-2 hover:bg-gray-50"
                 onClick={() => setIsOpen(false)}
               >
@@ -317,16 +319,16 @@ export default function vault() {
       </div>
 
       <div className="flex flex-col items-center">
-      <Link href="/" className="inline-block">
-        <h1 className="text-5xl font-bold tracking-tight mb-6 text-center cursor-pointer hover:opacity-80 transition">
-          fYield
-          <img
-            src="https://i.imgur.com/PLrFoiD.png"
-            alt="icon"
-            className="inline-block w-6 h-6 align-super ml-1 mb-1"
-          />
-        </h1>
-      </Link>
+        <Link href="/" className="inline-block">
+          <h1 className="text-5xl font-bold tracking-tight mb-6 text-center cursor-pointer hover:opacity-80 transition">
+            fYield
+            <img
+              src="https://i.imgur.com/PLrFoiD.png"
+              alt="icon"
+              className="inline-block w-6 h-6 align-super ml-1 mb-1"
+            />
+          </h1>
+        </Link>
 
         <Card className="w-[420px] overflow-hidden gap-2 relative pb-0">
           <CardHeader className="z-10">
@@ -488,9 +490,11 @@ export default function vault() {
               )}
 
               {txStatus === "success" && (
-                <p className="text-xs text-emerald-600 text-center">
-                  FXRP deposited to the vault.
-                </p>
+                <>
+                  <p className="text-xs text-emerald-600 text-center">
+                    FXRP deposited to the vault.
+                  </p>
+                </>
               )}
             </div>
 
@@ -503,10 +507,10 @@ export default function vault() {
         <div className="absolute bottom-0 right-0 mb-4 mr-4 text-sm text-gray-500">
           <span><b>Powered</b> by 
             <img
-                  src="https://wp.logos-download.com/wp-content/uploads/2024/09/Flare_FLR_Logo_full.png"
-                  alt="icon"
-                  className="inline-block w-12 h-4 ml-1 mb-1"
-              />
+              src="https://wp.logos-download.com/wp-content/uploads/2024/09/Flare_FLR_Logo_full.png"
+              alt="icon"
+              className="inline-block w-12 h-4 ml-1 mb-1"
+            />
           </span>
         </div>
       </div>

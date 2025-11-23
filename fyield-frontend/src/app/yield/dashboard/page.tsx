@@ -162,7 +162,7 @@ export default function Dashboard() {
       {/* Main content */}
       <div className="flex flex-col items-center w-full max-w-3xl px-4 gap-6">
       <Link href="/" className="inline-block">
-        <h1 className="text-5xl font-bold tracking-tight mb-6 text-center cursor-pointer hover:opacity-80 transition">
+        <h1 className="text-5xl font-bold tracking-tight text-center cursor-pointer hover:opacity-80 transition">
           fYield
           <img
             src="https://i.imgur.com/PLrFoiD.png"
@@ -281,17 +281,10 @@ export default function Dashboard() {
 
               {/* Right: APY + Deposit */}
               <div className="flex flex-col items-end gap-2">
-                <div className="flex flex-col items-end">
-                  <p className="text-xs text-gray-500">APY</p>
-                  <p className="text-lg font-semibold">
-                    {mockVaultAPY.toFixed(2)}%
-                  </p>
-                </div>
-
                 <Link href="/yield/vault">
                   <button
                     type="button"
-                    className="mt-1 rounded-full px-4 py-1.5 text-xs font-medium text-white bg-black hover:opacity-90 transition"
+                    className="rounded-full px-4 py-1.5 text-xs font-medium text-white bg-black hover:opacity-90 transition"
                   >
                     Deposit
                   </button>
