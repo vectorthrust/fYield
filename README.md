@@ -17,6 +17,8 @@ fYield consists of three components:
 FlareVault (Flare)  <— events —>  Coordinator (Node.js)  <— transactions —>  AAVEManager (Ethereum)
 ```
 
+---
+
 ## **📷 Preview**
 
 <table>
@@ -29,6 +31,8 @@ FlareVault (Flare)  <— events —>  Coordinator (Node.js)  <— transactions �
     <td><img width="100%" src="https://github.com/user-attachments/assets/7a07bae5-a289-408f-a176-dafcab2801ad" /></td>
   </tr>
 </table>
+
+---
 
 ### **FlareVault (Flare Network)**
 
